@@ -1,1 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WHOOP Daily Recovery Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0e13;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 24px 16px;
+    gap: 32px;
+  }
+  .phone {
+    background: #0d1117;
+    border-radius: 44px;
+    border: 2px solid #30363d;
+    width: 375px;
+    min-height: 812px;
+    padding: 20px 0 12px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.7);
+  }
+  .notch {
+    width: 120px; height: 28px;
+    background: #0d1117;
+    border: 2px solid #30363d;
+    border-radius: 0 0 20px 20px;
+    position: absolute; top: 0; left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+  }
+  .status-bar {
+    display: flex; justify-content: space-between;
+    padding: 6px 24px 0;
+    font-size: 11px; color: #8b949e;
+    margin-top: 10px;
+  }
+  .header {
+    text-align: center;
+    padding: 8px 24px 4px;
+    border-bottom: 0.5px solid #21262d;
+    margin-bottom: 4px;
+  }
+  .header .date { font-size: 12px; color: #8b949e; letter-spacing: 0.5px; }
+  .header .title { font-size: 18px; font-weight: 600; color: #e6edf3; margin-top: 2px; }
+  .section { padding: 12px 20px 0; }
+  .section-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 1px;
+    color: #8b949e; text-transform: uppercase; margin-bottom: 10px;
+  }
+  .metric-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px; padding: 0 20px; margin-top: 12px;
+  }
+  .metric-card {
+    background: #161b22;
+    border-radius: 12px;
+    padding: 10px 8px;
+    border: 0.5px solid #30363d;
+    text-align: center;
+  }
+  .metric-card .val { font-size: 16px; font-weight: 700; }
+  .metric-card .lbl { font-size: 10px; color: #8b949e; margin-top: 2px; }
+  .sleep-bar-wrap { padding: 0 20px; margin-top: 12px; }
+  .sleep-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .sleep-title { font-size: 13px; font-weight: 600; color: #e6edf3; }
+  .sleep-eff { font-size: 12px; color: #39d353; font-weight: 600; }
+  .sleep-bar { width: 100%; height: 10px; border-radius: 5px; display: flex; overflow: hidden; }
+  .sleep-legend { display: flex; gap: 14px; margin-top: 6px; }
+  .sleep-legend span { font-size: 10px; color: #8b949e; display: flex; align-items: center; gap: 4px; }
+  .sleep-legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .week-wrap { padding: 0 20px; margin-top: 16px; }
+  .week-title { font-size: 13px; font-weight: 600; color: #e6edf3; margin-bottom: 10px; }
+  .nav-bar {
+    display: flex; justify-content: space-around;
+    padding: 10px 0 6px;
+    border-top: 0.5px solid #21262d;
+    margin-top: 16px;
+  }
+  .nav-item { text-align: center; }
+  .nav-item .nav-icon { font-size: 20px; }
+  .nav-item .nav-lbl { font-size: 9px; margin-top: 2px; }
+  .nav-item.active .nav-lbl { color: #39d353; }
+  .nav-item:not(.active) .nav-lbl { color: #8b949e; }
+  #recovery-svg { display: block; margin: 0 auto; }
+  #weekly-svg { display: block; }
+</style>
+</head>
+<body>
 
+<!-- LEFT: Dashboard panel -->
+<div class="phone">
+  <div class="notch"></div>
+  <div class="status-bar">
+    <span>9:41</span>
+    <span style="color:#e6edf3;font-weight:600;letter-spacing:0.3px">WHOOP</span>
+    <span>●●●</span>
+  </div>
+  <div class="header">
+    <div class="date">TUESDAY · JAN 14, 2025</div>
+    <div class="title">Daily Recovery</div>
+  </div>
+
+  <!-- Recovery Ring (D3) -->
+  <svg id="recovery-svg" width="200" height="200" viewBox="0 0 200 200"></svg>
+
+  <!-- Metric Cards -->
+  <div class="metric-row">
+    <div class="metric-card">
+      <div class="val" style="color:#bc8cff">82 ms</div>
+      <div class="lbl">HRV</div>
+    </div>
+    <div class="metric-card">
+      <div class="val" style="color:#58a6ff">54 bpm</div>
+      <div class="lbl">Resting HR</div>
+    </div>
+    <div class="metric-card">
+      <div class="val" style="color:#3fb950">14.2</div>
+      <div class="lbl">Resp. Rate</div>
+    </div>
+  </div>
+
+  <!-- Sleep Bar -->
+  <div class="sleep-bar-wrap">
+    <div class="sleep-header">
+      <span class="sleep-title">Sleep  7h 22m</span>
+      <span class="sleep-eff">85% efficient</span>
+    </div>
+    <div id="sleep-bar-svg-wrap"></div>
+    <div class="sleep-legend">
+      <span><i style="background:#3a5f7a"></i>Light 4h 23m</span>
+      <span><i style="background:#bc8cff"></i>REM 1h 39m</span>
+      <span><i style="background:#58a6ff"></i>Deep 1h 18m</span>
+    </div>
+  </div>
+
+  <!-- Strain gauge (D3) -->
+  <div class="section">
+    <div class="section-label">Day Strain</div>
+    <svg id="strain-svg" width="335" height="28"></svg>
+    <div style="text-align:center;font-size:12px;color:#f0c419;margin-top:4px;font-weight:600">10.2 / 21 &nbsp;·&nbsp; Moderate</div>
+  </div>
+
+  <!-- Weekly Recovery (D3 bar chart) -->
+  <div class="week-wrap">
+    <div class="week-title">This Week</div>
+    <svg id="weekly-svg" width="335" height="80"></svg>
+  </div>
+
+  <!-- Nav -->
+  <div class="nav-bar">
+    <div class="nav-item active">
+      <div class="nav-icon" style="color:#39d353">◎</div>
+      <div class="nav-lbl">Recovery</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon" style="color:#8b949e">⊡</div>
+      <div class="nav-lbl">Strain</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon" style="color:#8b949e">◑</div>
+      <div class="nav-lbl">Sleep</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon" style="color:#8b949e">♥</div>
+      <div class="nav-lbl">Health</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon" style="color:#8b949e">≡</div>
+      <div class="nav-lbl">More</div>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT: HRV + Strain trend panel -->
+<div class="phone">
+  <div class="notch"></div>
+  <div class="status-bar">
+    <span>9:41</span>
+    <span style="color:#e6edf3;font-weight:600;letter-spacing:0.3px">WHOOP</span>
+    <span>●●●</span>
+  </div>
+  <div class="header">
+    <div class="date">LAST 30 DAYS</div>
+    <div class="title">Trends</div>
+  </div>
+
+  <!-- HRV Trend (D3 line) -->
+  <div class="section">
+    <div class="section-label">Heart Rate Variability</div>
+    <svg id="hrv-svg" width="335" height="130"></svg>
+  </div>
+
+  <!-- Strain vs Recovery scatter-ish -->
+  <div class="section" style="margin-top:8px">
+    <div class="section-label">Strain vs Recovery Balance</div>
+    <svg id="balance-svg" width="335" height="130"></svg>
+  </div>
+
+  <!-- Activity type breakdown (horizontal bars) -->
+  <div class="section" style="margin-top:8px">
+    <div class="section-label">Activity Type — Avg Strain</div>
+    <svg id="activity-svg" width="335" height="160"></svg>
+  </div>
+
+  <!-- Sleep stage distribution -->
+  <div class="section" style="margin-top:8px">
+    <div class="section-label">Sleep Stage Distribution</div>
+    <svg id="sleep-dist-svg" width="335" height="80"></svg>
+  </div>
+
+  <div class="nav-bar" style="margin-top:8px">
+    <div class="nav-item">
+      <div class="nav-icon" style="color:#8b949e">◎</div>
+      <div class="nav-lbl">Recovery</div>
+    </div>
+    <div class="nav-item active">
+      <div class="nav-icon" style="color:#58a6ff">⊡</div>
+      <div class="nav-lbl">Strain</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon" style="color:#8b949e">◑</div>
+      <div class="nav-lbl">Sleep</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon" style="color:#8b949e">♥</div>
+      <div class="nav-lbl">Health</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon" style="color:#8b949e">≡</div>
+      <div class="nav-lbl">More</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// PANEL 1 — Recovery Ring
+// ============================================================
+(function() {
+  const score = 73;
+  const svg = d3.select('#recovery-svg');
+  const cx = 100, cy = 100, r = 68, sw = 14;
+  const startAngle = -Math.PI * 0.85;
+  const endAngle = Math.PI * 0.85;
+  const fillAngle = startAngle + (endAngle - startAngle) * (score / 100);
+
+  const arc = d3.arc().innerRadius(r - sw).outerRadius(r).startAngle(startAngle).endAngle(endAngle);
+  const arcFill = d3.arc().innerRadius(r - sw).outerRadius(r).startAngle(startAngle).endAngle(fillAngle)
+    .cornerRadius(7);
+
+  const g = svg.append('g').attr('transform', `translate(${cx},${cy})`);
+  g.append('path').datum({}).attr('d', arc).attr('fill', '#1e2938');
+  g.append('path').datum({}).attr('d', arcFill).attr('fill', '#39d353');
+
+  g.append('text').attr('text-anchor', 'middle').attr('dy', '-0.05em')
+    .attr('font-size', 42).attr('font-weight', 700).attr('fill', '#39d353')
+    .attr('font-family', '-apple-system, sans-serif').text(score);
+
+  g.append('text').attr('text-anchor', 'middle').attr('dy', '1.4em')
+    .attr('font-size', 12).attr('fill', '#8b949e')
+    .attr('font-family', '-apple-system, sans-serif').text('Recovery Score');
+
+  g.append('text').attr('text-anchor', 'middle').attr('dy', '2.8em')
+    .attr('font-size', 11).attr('fill', '#39d353').attr('font-weight', 600)
+    .attr('font-family', '-apple-system, sans-serif').text('● GOOD');
+})();
+
+// ============================================================
+// Sleep Bar (D3 stacked horizontal)
+// ============================================================
+(function() {
+  const wrap = document.getElementById('sleep-bar-svg-wrap');
+  const W = 335, H = 10;
+  const svg = d3.select(wrap).append('svg').attr('width', W).attr('height', H);
+  const stages = [
+    { pct: 0.59, color: '#3a5f7a' },
+    { pct: 0.22, color: '#bc8cff' },
+    { pct: 0.18, color: '#58a6ff' }
+  ];
+  let x = 0;
+  const defs = svg.append('defs');
+  const clip = defs.append('clipPath').attr('id', 'sleep-clip');
+  clip.append('rect').attr('width', W).attr('height', H).attr('rx', 5);
+  const g = svg.append('g').attr('clip-path', 'url(#sleep-clip)');
+  stages.forEach(s => {
+    g.append('rect').attr('x', x).attr('y', 0)
+      .attr('width', s.pct * W).attr('height', H).attr('fill', s.color);
+    x += s.pct * W;
+  });
+})();
+
+// ============================================================
+// Strain Gauge
+// ============================================================
+(function() {
+  const svg = d3.select('#strain-svg');
+  const W = 335, H = 28, strain = 10.2, max = 21;
+  const zones = [
+    { from: 0, to: 7, color: '#1a3a1a' },
+    { from: 7, to: 14, color: '#3d3200' },
+    { from: 14, to: 21, color: '#4a1010' }
+  ];
+  const defs = svg.append('defs');
+  const clip = defs.append('clipPath').attr('id', 'strain-clip');
+  clip.append('rect').attr('width', W).attr('height', 12).attr('rx', 6).attr('y', 4);
+  const g = svg.append('g').attr('clip-path', 'url(#strain-clip)');
+  zones.forEach(z => {
+    const x0 = (z.from / max) * W, x1 = (z.to / max) * W;
+    g.append('rect').attr('x', x0).attr('y', 4).attr('width', x1 - x0).attr('height', 12).attr('fill', z.color);
+  });
+  // filled portion
+  svg.append('rect').attr('x', 0).attr('y', 4).attr('width', (strain/max)*W).attr('height', 12)
+    .attr('rx', 6).attr('fill', '#f0c41988').attr('clip-path', 'url(#strain-clip)');
+  // marker
+  const mx = (strain / max) * W;
+  svg.append('line').attr('x1', mx).attr('x2', mx).attr('y1', 1).attr('y2', 18)
+    .attr('stroke', '#f0c419').attr('stroke-width', 2).attr('stroke-linecap', 'round');
+  // labels
+  ['0','7','14','21'].forEach((v, i) => {
+    svg.append('text').attr('x', (i/3)*W).attr('y', 28).attr('text-anchor','middle')
+      .attr('font-size', 9).attr('fill', '#8b949e').attr('font-family', '-apple-system,sans-serif').text(v);
+  });
+})();
+
+// ============================================================
+// Weekly Recovery Bars
+// ============================================================
+(function() {
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const vals = [71, 55, 82, 48, 73, 88, 65];
+  const svg = d3.select('#weekly-svg');
+  const W = 335, H = 80, barW = 32, gap = (W - days.length * barW) / (days.length + 1);
+  const yScale = d3.scaleLinear().domain([0, 100]).range([0, H - 22]);
+
+  days.forEach((d, i) => {
+    const x = gap + i * (barW + gap);
+    const bh = yScale(vals[i]);
+    const col = vals[i] >= 67 ? '#39d353' : vals[i] >= 34 ? '#f0c419' : '#f85149';
+    svg.append('rect').attr('x', x).attr('y', H - 20 - bh).attr('width', barW)
+      .attr('height', bh).attr('rx', 6).attr('fill', col + '55').attr('stroke', col).attr('stroke-width', 1);
+    svg.append('text').attr('x', x + barW / 2).attr('y', H - 5).attr('text-anchor','middle')
+      .attr('font-size', 10).attr('fill', '#8b949e').attr('font-family', '-apple-system,sans-serif').text(d);
+    svg.append('text').attr('x', x + barW / 2).attr('y', H - 22 - bh).attr('text-anchor','middle')
+      .attr('font-size', 9).attr('fill', col).attr('font-family', '-apple-system,sans-serif').text(vals[i]);
+  });
+})();
+
+// ============================================================
+// PANEL 2 — HRV Trend (30-day line)
+// ============================================================
+(function() {
+  const svg = d3.select('#hrv-svg');
+  const W = 335, H = 130, margin = {top:14,right:12,bottom:24,left:32};
+  const iW = W - margin.left - margin.right;
+  const iH = H - margin.top - margin.bottom;
+
+  const hrv30 = Array.from({length:30}, (_,i) => ({
+    day: i,
+    val: 65 + Math.sin(i*0.4)*18 + Math.random()*12
+  }));
+  const baseline = 73;
+
+  const xS = d3.scaleLinear().domain([0,29]).range([0, iW]);
+  const yS = d3.scaleLinear().domain([40,110]).range([iH, 0]);
+
+  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  // Baseline band
+  g.append('rect').attr('x',0).attr('y', yS(baseline+8)).attr('width',iW)
+    .attr('height', yS(baseline-8) - yS(baseline+8))
+    .attr('fill','#bc8cff11');
+  g.append('line').attr('x1',0).attr('x2',iW).attr('y1',yS(baseline)).attr('y2',yS(baseline))
+    .attr('stroke','#bc8cff44').attr('stroke-width',1).attr('stroke-dasharray','4 3');
+  g.append('text').attr('x',iW+2).attr('y',yS(baseline)+3).attr('font-size',9)
+    .attr('fill','#bc8cff88').attr('font-family','-apple-system,sans-serif').text('avg');
+
+  // Area
+  const area = d3.area().x(d=>xS(d.day)).y0(iH).y1(d=>yS(d.val)).curve(d3.curveCatmullRom);
+  const line = d3.line().x(d=>xS(d.day)).y(d=>yS(d.val)).curve(d3.curveCatmullRom);
+
+  const defs = svg.append('defs');
+  const grad = defs.append('linearGradient').attr('id','hrv-grad').attr('x1','0').attr('x2','0').attr('y1','0').attr('y2','1');
+  grad.append('stop').attr('offset','0%').attr('stop-color','#bc8cff').attr('stop-opacity',0.25);
+  grad.append('stop').attr('offset','100%').attr('stop-color','#bc8cff').attr('stop-opacity',0);
+
+  g.append('path').datum(hrv30).attr('d', area).attr('fill','url(#hrv-grad)');
+  g.append('path').datum(hrv30).attr('d', line).attr('fill','none').attr('stroke','#bc8cff').attr('stroke-width',1.8);
+
+  // Axes
+  g.append('g').attr('transform',`translate(0,${iH})`)
+    .call(d3.axisBottom(xS).ticks(5).tickFormat(d=>`d${d+1}`))
+    .call(g => { g.select('.domain').remove(); g.selectAll('line').remove();
+      g.selectAll('text').attr('fill','#8b949e').attr('font-size',9); });
+  g.append('g').call(d3.axisLeft(yS).ticks(4))
+    .call(g => { g.select('.domain').remove(); g.selectAll('line').attr('stroke','#21262d');
+      g.selectAll('text').attr('fill','#8b949e').attr('font-size',9); });
+
+  g.append('text').attr('x', iW-2).attr('y', yS(hrv30[29].val)).attr('text-anchor','end')
+    .attr('font-size',11).attr('fill','#bc8cff').attr('font-weight',550)
+    .attr('font-family','-apple-system,sans-serif').text('82 ms');
+})();
+
+// ============================================================
+// Strain vs Recovery Balance (grouped bar)
+// ============================================================
+(function() {
+  const svg = d3.select('#balance-svg');
+  const W=335, H=130, margin={top:14,right:12,bottom:24,left:32};
+  const iW=W-margin.left-margin.right, iH=H-margin.top-margin.bottom;
+
+  const days7 = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const strain7 = [8.2,12.1,6.5,14.3,10.2,5.1,9.8];
+  const rec7    = [71,  55,  82,  48,  73,  88,  65];
+
+  const xOuter = d3.scaleBand().domain(days7).range([0,iW]).padding(0.2);
+  const xInner = d3.scaleBand().domain(['strain','rec']).range([0, xOuter.bandwidth()]).padding(0.08);
+  const yS = d3.scaleLinear().domain([0,100]).range([iH,0]);
+  const yStrain = d3.scaleLinear().domain([0,21]).range([iH,0]);
+
+  const g = svg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+
+  days7.forEach((d,i) => {
+    const gx = xOuter(d);
+    g.append('rect')
+      .attr('x', gx + xInner('strain')).attr('y', yStrain(strain7[i]))
+      .attr('width', xInner.bandwidth()).attr('height', iH - yStrain(strain7[i]))
+      .attr('rx', 3).attr('fill','#ff9e6488').attr('stroke','#ff9e64').attr('stroke-width',0.7);
+    g.append('rect')
+      .attr('x', gx + xInner('rec')).attr('y', yS(rec7[i]))
+      .attr('width', xInner.bandwidth()).attr('height', iH - yS(rec7[i]))
+      .attr('rx', 3).attr('fill','#39d35388').attr('stroke','#39d353').attr('stroke-width',0.7);
+  });
+
+  g.append('g').attr('transform',`translate(0,${iH})`)
+    .call(d3.axisBottom(xOuter).tickSize(0))
+    .call(g => { g.select('.domain').remove();
+      g.selectAll('text').attr('fill','#8b949e').attr('font-size',9); });
+
+  // Legend
+  const leg = g.append('g').attr('transform',`translate(${iW-100},-2)`);
+  leg.append('rect').attr('width',8).attr('height',8).attr('rx',2).attr('fill','#ff9e64');
+  leg.append('text').attr('x',11).attr('y',8).attr('font-size',9).attr('fill','#8b949e')
+    .attr('font-family','-apple-system,sans-serif').text('Strain');
+  leg.append('rect').attr('x',46).attr('width',8).attr('height',8).attr('rx',2).attr('fill','#39d353');
+  leg.append('text').attr('x',57).attr('y',8).attr('font-size',9).attr('fill','#8b949e')
+    .attr('font-family','-apple-system,sans-serif').text('Recovery');
+})();
+
+// ============================================================
+// Activity Type — Avg Strain (horizontal bars)
+// ============================================================
+(function() {
+  const svg = d3.select('#activity-svg');
+  const W=335, H=160, margin={top:8,right:40,bottom:8,left:82};
+  const iW=W-margin.left-margin.right, iH=H-margin.top-margin.bottom;
+
+  const data = [
+    {name:'HIIT',val:15.65},
+    {name:'CrossFit',val:14.53},
+    {name:'Running',val:13.56},
+    {name:'Swimming',val:12.58},
+    {name:'Cycling',val:11.63},
+    {name:'Weight Tr.',val:9.68},
+  ].reverse();
+
+  const xS = d3.scaleLinear().domain([0,21]).range([0,iW]);
+  const yS = d3.scaleBand().domain(data.map(d=>d.name)).range([0,iH]).padding(0.28);
+
+  const g = svg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+
+  // Grid lines
+  [0,7,14,21].forEach(v => {
+    g.append('line').attr('x1',xS(v)).attr('x2',xS(v)).attr('y1',0).attr('y2',iH)
+      .attr('stroke','#21262d').attr('stroke-width',1);
+  });
+
+  // Bars
+  data.forEach((d,i) => {
+    const col = d.val >= 14 ? '#f85149' : d.val >= 11 ? '#ff9e64' : '#f0c419';
+    g.append('rect').attr('x',0).attr('y',yS(d.name)).attr('width',0).attr('height',yS.bandwidth())
+      .attr('rx',4).attr('fill',col+'88').attr('stroke',col).attr('stroke-width',0.8)
+      .transition().duration(800).delay(i*80).attr('width',xS(d.val));
+    g.append('text').attr('x',-6).attr('y',yS(d.name)+yS.bandwidth()/2+4).attr('text-anchor','end')
+      .attr('font-size',10).attr('fill','#c9d1d9').attr('font-family','-apple-system,sans-serif')
+      .text(d.name);
+    g.append('text').attr('x',xS(d.val)+4).attr('y',yS(d.name)+yS.bandwidth()/2+4)
+      .attr('font-size',10).attr('fill',col).attr('font-weight',600)
+      .attr('font-family','-apple-system,sans-serif').text(d.val.toFixed(1));
+  });
+})();
+
+// ============================================================
+// Sleep Stage Distribution (stacked 100%)
+// ============================================================
+(function() {
+  const svg = d3.select('#sleep-dist-svg');
+  const W=335, H=80, margin={top:14,right:12,bottom:18,left:12};
+  const iW=W-margin.left-margin.right, iH=H-margin.top-margin.bottom;
+
+  const stages = [{n:'Light',v:4.38,c:'#3a5f7a'},{n:'REM',v:1.64,c:'#bc8cff'},{n:'Deep',v:1.28,c:'#58a6ff'}];
+  const total = stages.reduce((s,d)=>s+d.v,0);
+
+  const g = svg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+
+  // Stacked bars (single row, full-width)
+  const defs = svg.append('defs');
+  const clip2 = defs.append('clipPath').attr('id','stage-clip');
+  clip2.append('rect').attr('width',iW).attr('height',iH).attr('rx',6);
+  const barsG = g.append('g').attr('clip-path','url(#stage-clip)');
+
+  let x0 = 0;
+  stages.forEach(s => {
+    const w = (s.v/total)*iW;
+    barsG.append('rect').attr('x',x0).attr('y',0).attr('width',w).attr('height',iH).attr('fill',s.c);
+    if (w > 40) {
+      barsG.append('text').attr('x',x0+w/2).attr('y',iH/2+4).attr('text-anchor','middle')
+        .attr('font-size',10).attr('fill','#e6edf3').attr('font-weight',600)
+        .attr('font-family','-apple-system,sans-serif').text(s.n);
+    }
+    x0 += w;
+  });
+
+  // % labels below
+  x0 = 0;
+  stages.forEach(s => {
+    const w = (s.v/total)*iW;
+    g.append('text').attr('x',x0+w/2).attr('y',iH+14).attr('text-anchor','middle')
+      .attr('font-size',9).attr('fill',s.c).attr('font-family','-apple-system,sans-serif')
+      .text(`${Math.round(s.v/total*100)}%`);
+    x0 += w;
+  });
+})();
+</script>
+</body>
+</html>
